@@ -1,13 +1,14 @@
 version: "3.8"
 services:
   postgres:
-    image: postgres:15
+    image: ankane/pgvector:postgres-15
     environment:
       POSTGRES_USER: atlas
       POSTGRES_PASSWORD: atlaspass
       POSTGRES_DB: atlasdb
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
   minio:
@@ -53,14 +54,26 @@ services:
     depends_on: ["postgres"]
     ports:
       - "9300:9300"
+  embeddings:
+    build: ../services/embeddings
+    environment:
+      DATABASE_URL: postgres://atlas:atlaspass@postgres:5432/atlasdb?sslmode=disable
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOCAL_EMBEDDING_ENDPOINT: ${LOCAL_EMBEDDING_ENDPOINT:-}
+    depends_on:
+      - postgres
+    ports:
+      - "9500:9500"
   ai:
     build: ../services/ai
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOCAL_AI_ENDPOINT: ${LOCAL_AI_ENDPOINT:-}
+      EMB_SERVICE_URL: http://embeddings:9500
     ports:
       - "9400:9400"
-    depends_on: []
+    depends_on:
+      - embeddings
   web:
     build: ../apps/web
     ports:
@@ -69,7 +82,14 @@ services:
       NEXT_PUBLIC_API_BASE: http://id:9100
       NEXT_PUBLIC_YWS: ws://y-websocket:1234
       NEXT_PUBLIC_AI_BASE: http://ai:9400
-    depends_on: ["id","inbox","docs","ai","y-websocket"]
+      NEXT_PUBLIC_EMB_BASE: http://embeddings:9500
+    depends_on:
+      - id
+      - inbox
+      - docs
+      - embeddings
+      - ai
+      - y-websocket
 volumes:
   pgdata:
   miniodata:

@@ -46,6 +46,8 @@ export default function Docs() {
       const content = editor?.getHTML() || yText.toString();
       axios.post((process.env.NEXT_PUBLIC_API_BASE || "http://localhost:9300") + `/api/docs/save/${docId}`, { content }, { withCredentials: true })
         .catch(()=>{});
+      // after saving snapshot to persistence, trigger embedding upsert
+      axios.post((process.env.NEXT_PUBLIC_EMB_BASE || "http://localhost:9500") + "/v1/upsert", { id: docId, content }, { withCredentials: true }).catch(()=>{});
     }, 5000);
     return () => {
       clearInterval(persistInterval);

@@ -1,7 +1,9 @@
 package main
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -47,28 +49,54 @@ func jsonEscape(s string) string {
 	j, _ := json.Marshal(s)
 	return string(j)
 }
+// helper to call embeddings query service
+func retrieveContext(query string, k int) ([]string, error) {
+	embSvc := os.Getenv("EMB_SERVICE_URL")
+	if embSvc == "" {
+		embSvc = "http://embeddings:9500"
+	}
+	reqBody, _ := json.Marshal(map[string]interface{}{"query": query, "k": k})
+	resp, err := http.Post(embSvc+"/v1/query", "application/json", strings.NewReader(string(reqBody)))
+	if err != nil { return nil, err }
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("emb query err: %s", string(b))
+	}
+	var rows []struct{ ID, Content string; Distance float32 }
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil { return nil, err }
+	out := []string{}
+	for _, r := range rows { out = append(out, r.Content) }
+	return out, nil
+}
 func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 	var body struct{ Text string `json:"text"` }
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", 400); return
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil { http.Error(w,"bad body",400); return }
+	ctxDocs, err := retrieveContext(body.Text, 5)
+	if err == nil && len(ctxDocs) > 0 {
+		// prepend context into prompt
+		contextText := "CONTEXT:\n"
+		for i, d := range ctxDocs { contextText += fmt.Sprintf("DOC %d: %s\n", i+1, d) }
+		body.Text = contextText + "\n\nUSER TEXT:\n" + body.Text
 	}
-	out, err := proxyOpenAI("Summarize clearly and concisely:\n\n" + body.Text)
-	if err != nil {
-		http.Error(w, "ai error: "+err.Error(), 500); return
-	}
+	out, err := proxyOpenAI(body.Text)
+	if err != nil { http.Error(w,"ai error:"+err.Error(),500); return }
 	json.NewEncoder(w).Encode(map[string]string{"summary": out})
 }
 func inboxSuggestHandler(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Message string `json:"message"`
+	var body struct{ Message string `json:"message"` }
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil { http.Error(w,"bad body",400); return }
+	ctxDocs, _ := retrieveContext(body.Message, 5)
+	var prompt string
+	if len(ctxDocs) > 0 {
+		prompt = "Use context from company docs to draft a polite reply and list sources. CONTEXT:\n"
+		for i,d := range ctxDocs { prompt += fmt.Sprintf("DOC %d: %s\n", i+1, d) }
+		prompt += "\n\nMESSAGE:\n" + body.Message
+	} else {
+		prompt = "Reply politely to this message:\n\n" + body.Message
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", 400); return
-	}
-	out, err := proxyOpenAI("Write a polite reply suggestion to this message:\n\n" + body.Message)
-	if err != nil {
-		http.Error(w, "ai error", 500); return
-	}
+	out, err := proxyOpenAI(prompt)
+	if err != nil { http.Error(w,"ai error:"+err.Error(),500); return }
 	json.NewEncoder(w).Encode(map[string]string{"reply": out})
 }
 func health(w http.ResponseWriter, r *http.Request){ w.Write([]byte("ok")) }
@@ -77,7 +105,7 @@ func main() {
 	r.HandleFunc("/health", health)
 	r.HandleFunc("/v1/summarize", summarizeHandler).Methods("POST")
 	r.HandleFunc("/v1/inbox/suggest", inboxSuggestHandler).Methods("POST")
-	port := os.Getenv("PORT"); if port=="" {port="9400"}
+	port := os.Getenv("PORT"); if port=="" {port="9400" }
 	log.Println("ai router listening on", port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }

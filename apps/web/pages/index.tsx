@@ -11,6 +11,22 @@ export default function Home() {
     <div style={{ fontFamily: "Inter, system-ui, sans-serif", maxWidth: 900, margin: "48px auto" }}>
       <h1>ATLAS — unified suite (MVP)</h1>
       <p>One inbox, docs, and AI copilots — local first. Starter repo.</p>
+      <div style={{ marginBottom: 24 }}>
+        <a 
+          href="/docs" 
+          style={{
+            display: "inline-block",
+            padding: "8px 16px",
+            backgroundColor: "#0070f3",
+            color: "white",
+            textDecoration: "none",
+            borderRadius: "4px",
+            marginRight: "16px"
+          }}
+        >
+          Try Collaborative Docs →
+        </a>
+      </div>
       <div style={{ display: "flex", gap: 16 }}>
         <div style={{ flex: 1, padding: 16, border: "1px solid #eee", borderRadius: 8 }}>
           <h3>Sign in (demo)</h3>

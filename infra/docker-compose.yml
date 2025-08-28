@@ -40,13 +40,18 @@ services:
       DATABASE_URL: postgres://atlas:atlaspass@postgres:5432/atlasdb?sslmode=disable
     ports:
       - "9200:9200"
+  docs:
+    build: ../services/docs
+    ports:
+      - "9300:9300"
   web:
     build: ../apps/web
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_BASE: http://localhost:9100
-    depends_on: ["id","inbox"]
+      NEXT_PUBLIC_DOCS_BASE: http://localhost:9300
+    depends_on: ["id","inbox","docs"]
 volumes:
   pgdata:
   miniodata:

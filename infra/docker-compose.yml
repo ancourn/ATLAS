@@ -64,6 +64,24 @@ services:
       - postgres
     ports:
       - "9500:9500"
+  transcribe:
+    build: ../services/transcribe
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOCAL_TRANSCRIBE_ENDPOINT: ${LOCAL_TRANSCRIBE_ENDPOINT:-}
+    ports:
+      - "9501:9501"
+    depends_on:
+      - postgres
+  copilot:
+    build: ../services/copilot
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMB_SERVICE_URL: http://embeddings:9500
+    ports:
+      - "9502:9502"
+    depends_on:
+      - embeddings
   ai:
     build: ../services/ai
     environment:
@@ -83,11 +101,15 @@ services:
       NEXT_PUBLIC_YWS: ws://y-websocket:1234
       NEXT_PUBLIC_AI_BASE: http://ai:9400
       NEXT_PUBLIC_EMB_BASE: http://embeddings:9500
+      NEXT_PUBLIC_TRANSCRIBE: http://transcribe:9501
+      NEXT_PUBLIC_CO_PILOT: http://copilot:9502
     depends_on:
       - id
       - inbox
       - docs
       - embeddings
+      - transcribe
+      - copilot
       - ai
       - y-websocket
 volumes:

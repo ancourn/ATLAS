@@ -29,8 +29,7 @@ services:
     build: ../services/id
     depends_on: ["postgres"]
     environment:
-      DATABASE_URL: postgres://atlas:atlaspass@postgres:5432/atlasdb?sslmode=disable
-      JWT_SECRET: atlas-jwt-secret-key-2024
+      JWT_SECRET: ${JWT_SECRET:-atlas_dev_secret}
     ports:
       - "9100:9100"
   inbox:
@@ -41,31 +40,36 @@ services:
       DATABASE_URL: postgres://atlas:atlaspass@postgres:5432/atlasdb?sslmode=disable
     ports:
       - "9200:9200"
+  y-websocket:
+    build: ../services/y-websocket
+    ports:
+      - "1234:1234"
+    depends_on:
+      - docs
   docs:
     build: ../services/docs
-    depends_on: ["postgres"]
     environment:
       DATABASE_URL: postgres://atlas:atlaspass@postgres:5432/atlasdb?sslmode=disable
+    depends_on: ["postgres"]
     ports:
       - "9300:9300"
-  ai-router:
-    build: ../services/ai-router
-    depends_on: ["postgres"]
+  ai:
+    build: ../services/ai
     environment:
-      DATABASE_URL: postgres://atlas:atlaspass@postgres:5432/atlasdb?sslmode=disable
-      AI_ENDPOINT: http://localhost:8000
-      AI_API_KEY: demo-key
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOCAL_AI_ENDPOINT: ${LOCAL_AI_ENDPOINT:-}
     ports:
       - "9400:9400"
+    depends_on: []
   web:
     build: ../apps/web
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_BASE: http://localhost:9100
-      NEXT_PUBLIC_DOCS_BASE: http://localhost:9300
-      NEXT_PUBLIC_AI_BASE: http://localhost:9400
-    depends_on: ["id","inbox","docs","ai-router"]
+      NEXT_PUBLIC_API_BASE: http://id:9100
+      NEXT_PUBLIC_YWS: ws://y-websocket:1234
+      NEXT_PUBLIC_AI_BASE: http://ai:9400
+    depends_on: ["id","inbox","docs","ai","y-websocket"]
 volumes:
   pgdata:
   miniodata:
